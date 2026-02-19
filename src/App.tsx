@@ -1,7 +1,9 @@
+import TextAreaMentions from "./TextAreaMentions";
+
 function App() {
   return (
     <div>
-      <h1>HELLO</h1>
+      <TextAreaMentions />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import TextAreaMentions from "./TextAreaMentions";
+import { TextAreaMentions } from "./TextAreaMentions";
 
 function App() {
   return (

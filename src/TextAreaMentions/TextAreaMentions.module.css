@@ -1,0 +1,30 @@
+.dropdown {
+    background-color: rgb(176, 176, 176);
+    max-width: 300px;
+    max-height: 200px;
+    overflow-y: auto;   
+}
+.list{
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.list__item button {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    width: 100%;
+    background-color: rgb(42, 139, 139);
+}
+.list__item button:focus {
+    background-color: rgb(78, 205, 205);
+
+}
+.list__item__fullName {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}

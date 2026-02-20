@@ -1,35 +1,25 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from "react";
-import { USERS } from "./model";
+import { useCallback, useRef, useState } from "react";
 
-import getCaretCoordinates from "textarea-caret";
+import { useDropDownState } from "./useDropDownState";
+import { useClickOutside } from "./useClickOutside";
+import { useUsers } from "./useUsers";
+
+import { KEYS } from "./model";
 
 import classes from "./TextAreaMentions.module.css";
 
-const KEYS = {
-  BACKSPACE: "Backspace",
-  DELETE: "Delete",
-  AT: "@",
-  SPACE: " ",
-  NEW_LINE: "\n",
-  ESCAPE: "Escape",
-} as const;
-
 export const TextAreaMentions = () => {
-  const [dropdownState, setDropdownState] = useState({
-    isOpen: false,
-    coords: {
-      left: 0,
-      top: 0,
-    },
-  });
+  const { dropdownState, resetState, showDropDownAtCoords } =
+    useDropDownState();
+
+  const {
+    currentUserNameSearch,
+    filteredUsers,
+    updateUsersSearch,
+    resetSearch,
+  } = useUsers();
+
   const [isTypingUserName, setIsTypingUserName] = useState(false);
-  const [currentUserNameSearch, setCurrentUserNameSearch] = useState("");
   const [currentTypingIndex, setCurrentTypingIndex] = useState(0);
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -37,34 +27,28 @@ export const TextAreaMentions = () => {
 
   const closeDropDown = useCallback(() => {
     setIsTypingUserName(false);
-    setDropdownState({ isOpen: false, coords: { left: 0, top: 0 } });
-    setCurrentUserNameSearch("");
-  }, []);
+    resetState();
+    resetSearch();
+  }, [resetSearch, resetState]);
 
-  const handleChange = (
-    e: ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-  ) => {
-    const currentText = e.target.value;
-
-    if (isTypingUserName) {
-      const currentCaretPosition = e.currentTarget.selectionStart;
-      const lastIndexOfAtSymbol = currentText.lastIndexOf(
-        KEYS.AT,
-        currentCaretPosition
-      );
-      const newSearch = currentText.slice(
-        lastIndexOfAtSymbol,
-        currentCaretPosition
-      );
-      setCurrentUserNameSearch(newSearch);
-    }
-  };
+  useClickOutside({ textAreaRef, dropdownRef, closeDropDown });
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const CUT = e.ctrlKey && e.key.toLowerCase() === "x";
+    const CUT = e.ctrlKey && e.key.toLowerCase() === KEYS.x;
 
-    console.log(e.key);
-    if (e.key === KEYS.ESCAPE) {
+    if (e.key === KEYS.AT && e.shiftKey) {
+      const selectionStartAt = e.currentTarget.selectionStart;
+      showDropDownAtCoords(textAreaRef);
+      setIsTypingUserName(true);
+      setCurrentTypingIndex(selectionStartAt);
+    } else if (e.key === KEYS.ENTER && dropdownState.isOpen) {
+      e.preventDefault();
+      if (filteredUsers.length > 0) {
+        handleInsertUser(filteredUsers[0].userName);
+      }
+
+      closeDropDown();
+    } else if (e.key === KEYS.ESCAPE) {
       e.preventDefault();
       closeDropDown();
     } else if (e.key === KEYS.AT) {
@@ -78,20 +62,11 @@ export const TextAreaMentions = () => {
       ) {
         return;
       }
-      setIsTypingUserName(true);
 
       e.preventDefault();
 
-      const { left: caretLeft, top: caretTop } = getCaretCoordinates(
-        e.currentTarget,
-        e.currentTarget.selectionStart
-      );
-      const left = caretLeft + 10;
-      const top = caretTop + 15;
-      setDropdownState({
-        isOpen: true,
-        coords: { left, top },
-      });
+      showDropDownAtCoords(textAreaRef);
+      setIsTypingUserName(true);
 
       const newText = `${beforeText}${KEYS.AT}${afterText}`;
       e.currentTarget.value = newText;
@@ -147,6 +122,8 @@ export const TextAreaMentions = () => {
     textAreaRef.current.value = newText;
 
     textAreaRef.current.focus();
+    closeDropDown();
+
     textAreaRef.current.setSelectionRange(
       textAreaRef.current.value.slice(0, currentTypingIndex + 1).length +
         actualUserName.length +
@@ -159,31 +136,13 @@ export const TextAreaMentions = () => {
       textAreaRef.current.value.slice(0, currentTypingIndex + 1).length +
         actualUserName.length
     );
-    closeDropDown();
   };
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node) &&
-        textAreaRef.current &&
-        !textAreaRef.current.contains(e.target as Node)
-      ) {
-        closeDropDown();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [closeDropDown]);
 
   return (
     <div className={classes.wrapper}>
       <textarea
         ref={textAreaRef}
-        onChange={handleChange}
+        onChange={() => isTypingUserName && updateUsersSearch(textAreaRef)}
         onKeyDown={handleKeyDown}
         cols={46}
       />
@@ -191,10 +150,10 @@ export const TextAreaMentions = () => {
         <div
           ref={dropdownRef}
           onKeyDown={(e) => {
-            if (e.key === "Escape") {
+            if (e.key === KEYS.ESCAPE) {
               e.preventDefault();
-              closeDropDown();
               textAreaRef.current?.focus();
+              closeDropDown();
             }
           }}
           className={classes.dropdown}
@@ -204,18 +163,7 @@ export const TextAreaMentions = () => {
           }}
         >
           <ol className={classes.list}>
-            {USERS.filter(({ fullName, userName }) => {
-              console.log(fullName, currentUserNameSearch);
-
-              return (
-                userName.startsWith(
-                  currentUserNameSearch.toLocaleLowerCase()
-                ) ||
-                fullName
-                  .toLocaleLowerCase()
-                  .includes(currentUserNameSearch.slice(1).toLocaleLowerCase())
-              );
-            }).map(({ id, fullName, userName }) => (
+            {filteredUsers.map(({ id, fullName, userName }) => (
               <li
                 className={classes.list__item}
                 key={id}

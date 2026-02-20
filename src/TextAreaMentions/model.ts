@@ -1,4 +1,29 @@
-export const USERS = [
+export interface IUser {
+  id: number;
+  fullName: string;
+  userName: string;
+}
+
+export const KEYS = {
+  BACKSPACE: "Backspace",
+  DELETE: "Delete",
+  ENTER: "Enter",
+  AT: "@",
+  SPACE: " ",
+  NEW_LINE: "\n",
+  ESCAPE: "Escape",
+  x: "x",
+} as const;
+
+export const INITIAL_STATE = {
+  isOpen: false,
+  coords: {
+    left: 0,
+    top: 0,
+  },
+};
+
+export const USERS: IUser[] = [
   {
     id: 1,
     fullName: "Иванов Иван Иванович",

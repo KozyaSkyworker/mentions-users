@@ -1,8 +1,14 @@
+.wrapper {
+    position: relative;
+}
+
 .dropdown {
     background-color: rgb(176, 176, 176);
     max-width: 300px;
     max-height: 200px;
     overflow-y: auto;   
+
+    position: absolute;
 }
 .list{
     padding: 0;

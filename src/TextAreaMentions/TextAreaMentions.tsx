@@ -1,5 +1,13 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { USERS } from "./model";
+
+import getCaretCoordinates from "textarea-caret";
 
 import classes from "./TextAreaMentions.module.css";
 
@@ -8,25 +16,40 @@ const KEYS = {
   DELETE: "Delete",
   AT: "@",
   SPACE: " ",
+  NEW_LINE: "\n",
+  ESCAPE: "Escape",
 } as const;
 
 export const TextAreaMentions = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [dropdownState, setDropdownState] = useState({
+    isOpen: false,
+    coords: {
+      left: 0,
+      top: 0,
+    },
+  });
   const [isTypingUserName, setIsTypingUserName] = useState(false);
   const [currentUserNameSearch, setCurrentUserNameSearch] = useState("");
   const [currentTypingIndex, setCurrentTypingIndex] = useState(0);
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const closeDropDown = useCallback(() => {
+    setIsTypingUserName(false);
+    setDropdownState({ isOpen: false, coords: { left: 0, top: 0 } });
+    setCurrentUserNameSearch("");
+  }, []);
 
   const handleChange = (
     e: ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
   ) => {
     const currentText = e.target.value;
-    // console.log("VALUE = ", currentText);
+
     if (isTypingUserName) {
       const currentCaretPosition = e.currentTarget.selectionStart;
       const lastIndexOfAtSymbol = currentText.lastIndexOf(
-        "@",
+        KEYS.AT,
         currentCaretPosition
       );
       const newSearch = currentText.slice(
@@ -34,19 +57,17 @@ export const TextAreaMentions = () => {
         currentCaretPosition
       );
       setCurrentUserNameSearch(newSearch);
-      // console.log(newSearch);
     }
   };
 
-  // console.log("CURRENT SEACH = ", currentUserNameSearch);
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // console.log("LAST KEY = ", e.key);
-
     const CUT = e.ctrlKey && e.key.toLowerCase() === "x";
 
-    if (e.key === KEYS.AT) {
-      // console.log(e.key, e.currentTarget.selectionStart);
+    console.log(e.key);
+    if (e.key === KEYS.ESCAPE) {
+      e.preventDefault();
+      closeDropDown();
+    } else if (e.key === KEYS.AT) {
       const selectionStartAt = e.currentTarget.selectionStart;
       const beforeText = e.currentTarget.value.slice(0, selectionStartAt);
       const afterText = e.currentTarget.value.slice(selectionStartAt);
@@ -61,25 +82,24 @@ export const TextAreaMentions = () => {
 
       e.preventDefault();
 
-      // open the mention list
-      // console.log("open the mention list");
-      setIsOpen(true);
-
-      // const selectionStartAt = e.currentTarget.selectionStart;
-      // const beforeText = e.currentTarget.value.slice(0, selectionStartAt);
-      // const afterText = e.currentTarget.value.slice(selectionStartAt);
+      const { left: caretLeft, top: caretTop } = getCaretCoordinates(
+        e.currentTarget,
+        e.currentTarget.selectionStart
+      );
+      const left = caretLeft + 10;
+      const top = caretTop + 15;
+      setDropdownState({
+        isOpen: true,
+        coords: { left, top },
+      });
 
       const newText = `${beforeText}${KEYS.AT}${afterText}`;
-      // console.log(newText);
       e.currentTarget.value = newText;
-      // setText(newText);
-      // console.log(selectionStartAt);
       e.currentTarget.setSelectionRange(
         selectionStartAt + 1,
         selectionStartAt + 1
       );
       setCurrentTypingIndex(selectionStartAt);
-      //   e.currentTarget.selectionEnd = selectionStartAt;
     } else if (e.key === KEYS.BACKSPACE || e.key === KEYS.DELETE || CUT) {
       const start = e.currentTarget.selectionStart;
       const end = e.currentTarget.selectionEnd;
@@ -95,21 +115,14 @@ export const TextAreaMentions = () => {
       } else {
         deletedChar = value.substring(start, end);
       }
-      // console.log("Deleted character(s): ", deletedChar);
 
-      if ((deletedChar === KEYS.AT || deletedChar === value) && isOpen) {
-        setIsOpen(false);
+      if (
+        (deletedChar === KEYS.AT || deletedChar === value) &&
+        dropdownState.isOpen
+      ) {
+        closeDropDown();
       }
     }
-    // else if (
-    //   isTypingUserName &&
-    //   !e.shiftKey &&
-    //   !e.altKey &&
-    //   !e.ctrlKey &&
-    //   !e.metaKey
-    // ) {
-    //   setCurrentUserNameSearch((prev) => prev + e.key);
-    // }
   };
 
   const handleInsertUser = (userName: string) => {
@@ -146,29 +159,72 @@ export const TextAreaMentions = () => {
       textAreaRef.current.value.slice(0, currentTypingIndex + 1).length +
         actualUserName.length
     );
-    setIsTypingUserName(false);
-    setIsOpen(false);
-    setCurrentUserNameSearch("");
+    closeDropDown();
   };
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        textAreaRef.current &&
+        !textAreaRef.current.contains(e.target as Node)
+      ) {
+        closeDropDown();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [closeDropDown]);
+
   return (
-    <>
+    <div className={classes.wrapper}>
       <textarea
         ref={textAreaRef}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         cols={46}
       />
-      {isOpen && (
-        <div className={classes.dropdown}>
+      {dropdownState.isOpen && (
+        <div
+          ref={dropdownRef}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              closeDropDown();
+              textAreaRef.current?.focus();
+            }
+          }}
+          className={classes.dropdown}
+          style={{
+            left: `${dropdownState.coords.left}px`,
+            top: `${dropdownState.coords.top}px`,
+          }}
+        >
           <ol className={classes.list}>
-            {USERS.filter(({ userName }) =>
-              userName.startsWith(currentUserNameSearch)
-            ).map(({ id, fullName, userName }) => (
+            {USERS.filter(({ fullName, userName }) => {
+              console.log(fullName, currentUserNameSearch);
+
+              return (
+                userName.startsWith(
+                  currentUserNameSearch.toLocaleLowerCase()
+                ) ||
+                fullName
+                  .toLocaleLowerCase()
+                  .includes(currentUserNameSearch.slice(1).toLocaleLowerCase())
+              );
+            }).map(({ id, fullName, userName }) => (
               <li
                 className={classes.list__item}
                 key={id}
-                onClick={() => handleInsertUser(userName)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  handleInsertUser(userName);
+                }}
               >
                 <button>
                   <span className={classes.list__item__userName}>
@@ -183,6 +239,6 @@ export const TextAreaMentions = () => {
           </ol>
         </div>
       )}
-    </>
+    </div>
   );
 };
